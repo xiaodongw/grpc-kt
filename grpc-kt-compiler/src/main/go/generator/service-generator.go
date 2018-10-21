@@ -187,7 +187,7 @@ func (m *Method) CallParams() string {
 	case ClientStreaming:
 		fallthrough
 	case BidiStreaming:
-		return "req, callOptions"
+		return "req"
 	default:
 		return "UNKNOWN"
 	}

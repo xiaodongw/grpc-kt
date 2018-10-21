@@ -7,20 +7,19 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.CancellationException
 
 import com.google.common.base.Preconditions.checkNotNull
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.GlobalScope
+import io.grpc.internal.SerializingExecutor
+import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.launch
+import java.util.concurrent.ForkJoinPool
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Utility functions for adapting [ServerCallHandler]s to application service implementation,
  * meant to be used by the generated code.
  */
-object ServerCallsRx {
+object ServerCallsKt {
 
   /**
    * Creates a `ServerCallHandler` for a unary call method of the service.
@@ -118,7 +117,9 @@ object ServerCallsRx {
    *
    * @param <RESP>
   </RESP> */
-  internal class StreamResponseSender<RESP>(private val call: ServerCall<*, RESP>, private val channel: ReceiveChannel<RESP>): CallHandler, ReadyHandler {
+  internal class StreamResponseSender<RESP>(private val call: ServerCall<*, RESP>,
+                                            private val channel: ReceiveChannel<RESP>,
+                                            private val cd: CoroutineDispatcher): CallHandler, ReadyHandler {
     private val logger = LoggerFactory.getLogger(this.javaClass)
     private val working = AtomicBoolean(false)
 
@@ -136,11 +137,11 @@ object ServerCallsRx {
     private fun kickoff() {
       if(!working.compareAndSet(false, true)) return
 
-      logger.debug("kickoff")
-      GlobalScope.launch {
+      logger.trace("kickoff")
+      GlobalScope.launch(cd) {
         try {
           val msg = channel.receive()
-          logger.debug("channel.receive() msg=${LogUtils.objectString(msg)}")
+          logger.trace("channel.receive() msg=${LogUtils.objectString(msg)}")
           call.sendMessage(msg)
         } catch (t: Throwable) {
           when(t) {
@@ -159,7 +160,8 @@ object ServerCallsRx {
     }
   }
 
-  private open class StreamRequestReceiver<REQ>(private val call: ServerCall<REQ, *>) : ServerCall.Listener<REQ>(), CallHandler {
+  private open class StreamRequestReceiver<REQ>(private val call: ServerCall<REQ, *>,
+                                                private val cd: CoroutineDispatcher) : ServerCall.Listener<REQ>(), CallHandler {
     private val logger = LoggerFactory.getLogger(this.javaClass)
     private val channel = Channel<REQ>()
 
@@ -172,7 +174,7 @@ object ServerCallsRx {
 
     override fun onMessage(msg: REQ) {
       logger.trace("onMessage: msg=${LogUtils.objectString(msg)}")
-      GlobalScope.launch {
+      GlobalScope.launch(cd) {
         try {
           channel.send(msg)
           call.request(1)
@@ -183,11 +185,16 @@ object ServerCallsRx {
     }
 
     override fun onHalfClose() {
-      channel.close()
+      GlobalScope.launch(cd) {
+        channel.close()
+      }
+
     }
 
     override fun onCancel() {
-      channel.close(CancellationException("GRPC call is cancelled"))
+      GlobalScope.launch(cd) {
+        channel.close(CancellationException("GRPC call is cancelled"))
+      }
     }
 
     override fun start() {
@@ -208,8 +215,9 @@ object ServerCallsRx {
   class UnaryServerCallHandler<REQ, RESP>(private val method: UnaryMethod<REQ, RESP>) : ServerCallHandler<REQ, RESP> {
 
     override fun startCall(call: ServerCall<REQ, RESP>, headers: Metadata): ServerCall.Listener<REQ> {
+      val cd = SerializingExecutor(ForkJoinPool.commonPool()).asCoroutineDispatcher()
       val requestReceiver = SingleRequestReceiver(call)
-      GlobalScope.launch {
+      GlobalScope.launch(cd) {
         try {
           val req = requestReceiver.value().await()
           val resp = method.unaryInvoke(req)
@@ -234,12 +242,13 @@ object ServerCallsRx {
   class ServerStreamingServerCallHandler<REQ, RESP>(private val method: ServerStreamingMethod<REQ, RESP>) : ServerCallHandler<REQ, RESP> {
 
     override fun startCall(call: ServerCall<REQ, RESP>, headers: Metadata): ServerCall.Listener<REQ> {
+      val cd = SerializingExecutor(ForkJoinPool.commonPool()).asCoroutineDispatcher()
       val requestReceiver = SingleRequestReceiver(call)
       GlobalScope.launch {
         try {
           val req = requestReceiver.value().await()
-          val resps = method.serverStreamingInvoke(req)
-          val respSender = StreamResponseSender(call, resps)
+          val resp = method.serverStreamingInvoke(req)
+          val respSender = StreamResponseSender(call, resp, cd)
           requestReceiver.readyHandler = respSender
           respSender.start()
         } catch (t: Throwable) {
@@ -261,12 +270,17 @@ object ServerCallsRx {
   class ClientStreamingServerCallHandler<REQ, RESP>(private val method: ClientStreamingMethod<REQ, RESP>) : ServerCallHandler<REQ, RESP> {
 
     override fun startCall(call: ServerCall<REQ, RESP>, headers: Metadata): ServerCall.Listener<REQ> {
-      val requestReceiver = StreamRequestReceiver(call)
+      val cd = SerializingExecutor(ForkJoinPool.commonPool()).asCoroutineDispatcher()
+      val requestReceiver = StreamRequestReceiver(call, cd)
       GlobalScope.launch {
-        val reqs = requestReceiver.channel()
-        val resp = method.clientStreamingInvoke(reqs)
-        val respSender = SingleResponseSender(call, resp)
-        respSender.start()
+        try {
+          val req = requestReceiver.channel()
+          val resp = method.clientStreamingInvoke(req)
+          val respSender = SingleResponseSender(call, resp)
+          respSender.start()
+        } catch (t: Throwable) {
+          call.close(getStatus(t), Metadata())
+        }
       }
 
       requestReceiver.start()
@@ -283,12 +297,17 @@ object ServerCallsRx {
   class BidiStreamingServerCallHandler<REQ, RESP>(private val method: BidiStreamingMethod<REQ, RESP>) : ServerCallHandler<REQ, RESP> {
 
     override fun startCall(call: ServerCall<REQ, RESP>, headers: Metadata): ServerCall.Listener<REQ> {
-      val requestReceiver = StreamRequestReceiver(call)
+      val cd = SerializingExecutor(ForkJoinPool.commonPool()).asCoroutineDispatcher()
+      val requestReceiver = StreamRequestReceiver(call, cd)
       GlobalScope.launch {
-        val reqs = requestReceiver.channel()
-        val resps = method.bidiStreamingInvoke(reqs)
-        val respSender = StreamResponseSender(call, resps)
-        respSender.start()
+        try {
+          val req = requestReceiver.channel()
+          val resp = method.bidiStreamingInvoke(req)
+          val respSender = StreamResponseSender(call, resp, cd)
+          respSender.start()
+        } catch (t: Throwable) {
+          call.close(getStatus(t), Metadata())
+        }
       }
 
       requestReceiver.start()
@@ -314,28 +333,28 @@ object ServerCallsRx {
    * Adaptor to a client streaming method.
    */
   interface ClientStreamingMethod<REQ, RESP> {
-    suspend fun clientStreamingInvoke(reqs: ReceiveChannel<REQ>): RESP
+    suspend fun clientStreamingInvoke(req: ReceiveChannel<REQ>): RESP
   }
 
   /**
    * Adaptor to a bi-directional streaming method.
    */
   interface BidiStreamingMethod<REQ, RESP> {
-    suspend fun bidiStreamingInvoke(reqs: ReceiveChannel<REQ>): ReceiveChannel<RESP>
+    suspend fun bidiStreamingInvoke(req: ReceiveChannel<REQ>): ReceiveChannel<RESP>
   }
 
   fun <T> unimplementedUnaryCall(
     methodDescriptor: MethodDescriptor<*, *>): T {
     checkNotNull(methodDescriptor)
     throw Status.UNIMPLEMENTED
-      .withDescription(String.format("Method %s is unimplemented", methodDescriptor.fullMethodName))
+      .withDescription("Method ${methodDescriptor.fullMethodName} is unimplemented")
       .asRuntimeException()
   }
 
   fun <T> unimplementedStreamingCall(methodDescriptor: MethodDescriptor<*, *>): ReceiveChannel<T> {
     checkNotNull(methodDescriptor)
     throw Status.UNIMPLEMENTED
-      .withDescription(String.format("Method %s is unimplemented", methodDescriptor.fullMethodName))
+      .withDescription("Method ${methodDescriptor.fullMethodName} is unimplemented")
       .asRuntimeException()
   }
 

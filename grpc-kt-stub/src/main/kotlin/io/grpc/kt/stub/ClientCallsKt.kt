@@ -4,15 +4,17 @@ import io.grpc.CallOptions
 import io.grpc.ClientCall
 import io.grpc.Metadata
 import io.grpc.Status
+import io.grpc.internal.SerializingExecutor
 import io.grpc.kt.core.LogUtils
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.channels.ReceiveChannel
 import org.slf4j.LoggerFactory
+import java.util.concurrent.ForkJoinPool
 import java.util.concurrent.atomic.AtomicBoolean
 
-object ClientCallsRx {
+object ClientCallsKt {
 
   /**
    * Executes a unary call with a response.
@@ -36,8 +38,9 @@ object ClientCallsRx {
   suspend fun <REQ, RESP> serverStreamingCall(
     call: ClientCall<REQ, RESP>,
     req: REQ): ReceiveChannel<RESP> {
+    val cd = SerializingExecutor(ForkJoinPool.commonPool()).asCoroutineDispatcher()
     val requestSender = SingleRequestSender(call, req)
-    val responseReceiver = StreamResponseReceiver(call)
+    val responseReceiver = StreamResponseReceiver(call, cd)
 
     call.start(responseReceiver, Metadata())
     requestSender.start()
@@ -53,9 +56,9 @@ object ClientCallsRx {
    */
   suspend fun <REQ, RESP> clientStreamingCall(
     call: ClientCall<REQ, RESP>,
-    reqs: ReceiveChannel<REQ>,
-    options: CallOptions): RESP {
-    val requestSender = StreamRequestSender(call, reqs)
+    req: ReceiveChannel<REQ>): RESP {
+    val cd = SerializingExecutor(ForkJoinPool.commonPool()).asCoroutineDispatcher()
+    val requestSender = StreamRequestSender(call, req, cd)
     val responseReceiver = SingleResponseReceiver(call)
     responseReceiver.readyHandler = requestSender
 
@@ -73,10 +76,10 @@ object ClientCallsRx {
    */
   suspend fun <REQ, RESP> bidiStreamingCall(
     call: ClientCall<REQ, RESP>,
-    reqs: ReceiveChannel<REQ>,
-    options: CallOptions): ReceiveChannel<RESP> {
-    val requestSender = StreamRequestSender(call, reqs)
-    val responseReceiver = StreamResponseReceiver(call)
+    req: ReceiveChannel<REQ>): ReceiveChannel<RESP> {
+    val cd = SerializingExecutor(ForkJoinPool.commonPool()).asCoroutineDispatcher()
+    val requestSender = StreamRequestSender(call, req, cd)
+    val responseReceiver = StreamResponseReceiver(call, cd)
     responseReceiver.readyHandler = requestSender
 
     call.start(responseReceiver, Metadata())
@@ -136,7 +139,10 @@ object ClientCallsRx {
     }
   }
 
-  private class StreamRequestSender<REQ>(private val call: ClientCall<REQ, *>, private val channel: ReceiveChannel<REQ>) : CallHandler, ReadyHandler {
+  private class StreamRequestSender<REQ>(private val call: ClientCall<REQ, *>,
+                                         private val channel: ReceiveChannel<REQ>,
+                                         private val cd: CoroutineDispatcher)
+    : CallHandler, ReadyHandler {
     private val logger = LoggerFactory.getLogger(this.javaClass)
     private val working = AtomicBoolean(false)
 
@@ -153,11 +159,11 @@ object ClientCallsRx {
     private fun kickoff() {
       if(!working.compareAndSet(false, true)) return
 
-      logger.debug("kickoff")
+      logger.trace("kickoff")
       GlobalScope.launch {
         try {
           val msg = channel.receive()
-          logger.debug("channel.receive() msg=${LogUtils.objectString(msg)}")
+          logger.trace("channel.receive() msg=${LogUtils.objectString(msg)}")
           call.sendMessage(msg)
         } catch (t: Throwable) {
           when(t) {
@@ -176,7 +182,9 @@ object ClientCallsRx {
     }
   }
 
-  private open class StreamResponseReceiver<RESP>(private val call: ClientCall<*, RESP>) : ClientCall.Listener<RESP>(), CallHandler {
+  private open class StreamResponseReceiver<RESP>(private val call: ClientCall<*, RESP>,
+                                                  private val cd: CoroutineDispatcher)
+    : ClientCall.Listener<RESP>(), CallHandler {
     private val logger = LoggerFactory.getLogger(this.javaClass)
     private val channel = Channel<RESP>()
 
@@ -189,10 +197,10 @@ object ClientCallsRx {
 
     override fun onMessage(msg: RESP) {
       logger.trace("onMessage: msg=${LogUtils.objectString(msg)}")
-      GlobalScope.launch {
+      GlobalScope.launch(cd) {
         try {
           channel.send(msg)
-          logger.debug("channel.send() msg=${LogUtils.objectString(msg)}")
+          logger.trace("channel.send() msg=${LogUtils.objectString(msg)}")
           call.request(1)
         } catch (t: Throwable) {
           call.cancel("Error dispatching messages", t)
@@ -202,10 +210,12 @@ object ClientCallsRx {
 
     override fun onClose(status: Status, trailers: Metadata) {
       logger.trace("onClose")
-      if (status.isOk) {
-        channel.close()
-      } else {
-        channel.close(status.asRuntimeException(trailers))
+      GlobalScope.launch(cd) {
+        if (status.isOk) {
+          channel.close()
+        } else {
+          channel.close(status.asRuntimeException(trailers))
+        }
       }
     }
 

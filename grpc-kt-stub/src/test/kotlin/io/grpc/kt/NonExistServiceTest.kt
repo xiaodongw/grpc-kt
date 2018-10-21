@@ -1,10 +1,13 @@
 package io.grpc.kt
 
+import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.grpc.kt.EchoService.EchoReq
 import io.grpc.kt.IntegrationTestHelper.runBlockingWithTimeout
+import io.grpc.kt.TestHelper.consume
 import io.grpc.netty.NettyChannelBuilder
 import kotlinx.coroutines.channels.Channel
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 
@@ -14,20 +17,23 @@ class NonExistServiceTest {
 
   @Test
   fun testUnaryCall() {
-    assertThrows<StatusRuntimeException> {
+    val exception = assertThrows<StatusRuntimeException> {
       runBlockingWithTimeout(timeout) {
         client.unary(EchoReq.getDefaultInstance())
       }
     }
+    assertEquals(Status.UNAVAILABLE.code, exception.status.code)
   }
 
   @Test
   fun testBidiStreamingCall() {
-    assertThrows<StatusRuntimeException> {
+    val exception = assertThrows<StatusRuntimeException> {
       runBlockingWithTimeout(timeout) {
-        client.bidiStreaming(Channel())
+        val req = client.bidiStreaming(Channel())
+        consume(req)
       }
     }
+    assertEquals(Status.UNAVAILABLE.code, exception.status.code)
   }
 
   private fun newClient(): EchoGrpcKt.EchoStub {

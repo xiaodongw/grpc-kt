@@ -5,6 +5,7 @@ import io.grpc.Server
 import io.grpc.kt.EchoGrpcKt.EchoImplBase
 import io.grpc.kt.EchoService.*
 import io.grpc.kt.IntegrationTestHelper.runBlockingWithTimeout
+import io.grpc.kt.TestHelper.makeChannel
 import io.grpc.kt.core.LogUtils
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.ReceiveChannel
@@ -46,6 +47,7 @@ abstract class EchoTest : TestBase() {
         var count = 0
         for(msg in req) {
           logger.debug("clientStreaming req.msg=${LogUtils.objectString(msg)}")
+          require(msg.id == count)
           count++
         }
 
@@ -58,7 +60,12 @@ abstract class EchoTest : TestBase() {
 
       override suspend fun bidiStreaming(req: ReceiveChannel<EchoReq>): ReceiveChannel<EchoResp> {
         return GlobalScope.produce {
+          var count = 0
+
           for(reqMsg in req) {
+            require(reqMsg.id == count)
+            count++
+
             logger.debug("bidiStreaming req.msg=${LogUtils.objectString(reqMsg)}")
             val respMsg = EchoResp.newBuilder()
               .setId(reqMsg.id)
@@ -95,6 +102,7 @@ abstract class EchoTest : TestBase() {
       val resp = stub.serverStreaming(req)
       var count = 0
       for (msg in resp) {
+        require(msg.id == count)
         count++
       }
       assertEquals(streamNum, count)
@@ -104,19 +112,20 @@ abstract class EchoTest : TestBase() {
   @Test
   fun testClientStreaming() {
     runBlockingWithTimeout(timeout) {
-      val req = makeChannel()
+      val req = makeChannel(streamNum)
       val resp = stub.clientStreaming(req)
       assertEquals(streamNum, resp.count)
     }
   }
 
-  //@Test
+  @Test
   fun testBidiStreaming() {
     runBlockingWithTimeout(timeout) {
-      val req = makeChannel()
+      val req = makeChannel(streamNum)
       val resp = stub.bidiStreaming(req)
       var count = 0
       for(msg in resp) {
+        require(msg.id == count)
         count++
       }
 

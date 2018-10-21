@@ -1,7 +1,9 @@
 package io.grpc.kt
 
+import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.grpc.kt.IntegrationTestHelper.runBlockingWithTimeout
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 
@@ -14,12 +16,13 @@ class UnimplementedMethodTest : TestBase() {
 
   @Test
   fun testUnimplementedMethod() {
-    assertThrows<StatusRuntimeException> {
+    val exception = assertThrows<StatusRuntimeException> {
       runBlockingWithTimeout(timeout) {
         val stub = EchoGrpcKt.newStub(channel)
         stub.unary(EchoService.EchoReq.getDefaultInstance())
-
       }
     }
+    assertEquals(Status.UNIMPLEMENTED.code, exception.status.code)
+    assertEquals("UNIMPLEMENTED: Method io.grpc.kt.Echo/unary is unimplemented", exception.message)
   }
 }

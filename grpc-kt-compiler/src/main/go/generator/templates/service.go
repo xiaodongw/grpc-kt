@@ -7,8 +7,8 @@ package {{$s.JavaPackage}}
 
 import kotlinx.coroutines.channels.ReceiveChannel
 import io.grpc.MethodDescriptor.generateFullMethodName
-import io.grpc.kt.stub.ClientCallsRx
-import io.grpc.kt.stub.ServerCallsRx
+import io.grpc.kt.stub.ClientCallsKt
+import io.grpc.kt.stub.ServerCallsKt
 
 {{- /**
  * <pre>
@@ -62,7 +62,7 @@ object {{$s.Name}}GrpcKt {
      * </pre>
      */ -}}
     open suspend fun {{$m.JavaName}}(req: {{$m.FullInputType}}): {{$m.FullOutputType}} {
-      return ServerCallsRx.{{$m.UnimplementedCall}}({{$m.FieldName}})
+      return ServerCallsKt.{{$m.UnimplementedCall}}({{$m.FieldName}})
     }
     {{end}}
 
@@ -71,7 +71,7 @@ object {{$s.Name}}GrpcKt {
         {{- range $i, $m := .Methods}}
         .addMethod(
           {{$m.FieldName}},
-          ServerCallsRx.{{$m.Call}}(
+          ServerCallsKt.{{$m.Call}}(
             MethodHandlers<
               {{$m.InputType}},
               {{$m.OutputType}}>(
@@ -103,7 +103,7 @@ object {{$s.Name}}GrpcKt {
      * </pre>
      */ -}}
     suspend fun {{$m.JavaName}}(req: {{$m.FullInputType}}): {{$m.FullOutputType}} {
-      return ClientCallsRx.{{$m.Call}}(
+      return ClientCallsKt.{{$m.Call}}(
         getChannel().newCall({{$m.FieldName}}, callOptions), {{$m.CallParams}});
     }
     {{end}}
@@ -114,10 +114,10 @@ object {{$s.Name}}GrpcKt {
   {{- end}}
 
   private class MethodHandlers<REQ, RESP>(private val serviceImpl: {{$s.Name}}ImplBase, private val methodId: Int) :
-    io.grpc.kt.stub.ServerCallsRx.UnaryMethod<REQ, RESP>,
-    io.grpc.kt.stub.ServerCallsRx.ServerStreamingMethod<REQ, RESP>,
-    io.grpc.kt.stub.ServerCallsRx.ClientStreamingMethod<REQ, RESP>,
-    io.grpc.kt.stub.ServerCallsRx.BidiStreamingMethod<REQ, RESP> {
+    ServerCallsKt.UnaryMethod<REQ, RESP>,
+    ServerCallsKt.ServerStreamingMethod<REQ, RESP>,
+    ServerCallsKt.ClientStreamingMethod<REQ, RESP>,
+    ServerCallsKt.BidiStreamingMethod<REQ, RESP> {
 
     @java.lang.SuppressWarnings("unchecked")
     override suspend fun unaryInvoke(req: REQ): RESP {

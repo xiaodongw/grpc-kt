@@ -2,9 +2,12 @@ package io.grpc.kt
 
 import io.grpc.StatusRuntimeException
 import io.grpc.kt.IntegrationTestHelper.runBlockingWithTimeout
+import io.grpc.kt.TestHelper.consume
+import io.grpc.kt.TestHelper.makeChannel
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.produce
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 
@@ -39,29 +42,33 @@ class ErrorPropagationTest : TestBase() {
 
   @Test
   fun testUnaryError() {
-    assertThrows<StatusRuntimeException>("UNKNOWN: mocked unary error") {
+    val exception = assertThrows<StatusRuntimeException> {
       runBlockingWithTimeout(timeout) {
         stub.unary(EchoService.EchoReq.getDefaultInstance())
       }
     }
+    assertEquals("UNKNOWN: mocked unary error", exception.message)
   }
 
   @Test
   fun testServerStreamingError() {
-    assertThrows<StatusRuntimeException>("UNKNOWN: mocked server streaming error") {
+    val exception = assertThrows<StatusRuntimeException> {
       runBlockingWithTimeout(timeout) {
-        stub.serverStreaming(EchoService.EchoCountReq.getDefaultInstance())
+        val resp = stub.serverStreaming(EchoService.EchoCountReq.getDefaultInstance())
+        consume(resp)
       }
     }
+    assertEquals("UNKNOWN: mocked server streaming error", exception.message)
   }
 
   @Test
   fun testClientStreamingError() {
-    assertThrows<StatusRuntimeException>("CANCELLED: Subscription cancelled") {
-      val req = makeChannel()
+    val exception = assertThrows<StatusRuntimeException> {
+      val req = makeChannel(10)
       runBlockingWithTimeout(timeout) {
         stub.clientStreaming(req)
       }
     }
+    assertEquals("UNKNOWN: mocked client streaming error", exception.message)
   }
 }
