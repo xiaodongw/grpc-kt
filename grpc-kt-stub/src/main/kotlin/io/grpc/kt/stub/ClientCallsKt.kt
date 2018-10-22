@@ -145,6 +145,7 @@ object ClientCallsKt {
     : CallHandler, ReadyHandler {
     private val logger = LoggerFactory.getLogger(this.javaClass)
     private val working = AtomicBoolean(false)
+    private var completed = false
 
     override fun onReady() {
       logger.trace("onReady")
@@ -157,7 +158,8 @@ object ClientCallsKt {
     }
 
     private fun kickoff() {
-      if(!working.compareAndSet(false, true)) return
+      if (completed) return
+      if (!working.compareAndSet(false, true)) return
 
       logger.trace("kickoff")
       GlobalScope.launch {
@@ -167,7 +169,10 @@ object ClientCallsKt {
           call.sendMessage(msg)
         } catch (t: Throwable) {
           when(t) {
-            is ClosedReceiveChannelException -> call.halfClose()
+            is ClosedReceiveChannelException -> {
+              call.halfClose()
+              completed = true
+            }
             else -> call.cancel("Error on receiving message from channel", t)
           }
         } finally {

@@ -304,6 +304,7 @@ object ServerCallsKt {
           val req = requestReceiver.channel()
           val resp = method.bidiStreamingInvoke(req)
           val respSender = StreamResponseSender(call, resp, cd)
+          requestReceiver.readyHandler = respSender
           respSender.start()
         } catch (t: Throwable) {
           call.close(getStatus(t), Metadata())

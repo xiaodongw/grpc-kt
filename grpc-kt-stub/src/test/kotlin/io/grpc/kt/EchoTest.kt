@@ -20,24 +20,24 @@ abstract class EchoTest : TestBase() {
   override fun newService(): EchoImplBase {
     return object : EchoImplBase() {
       override suspend fun unary(req: EchoReq): EchoResp {
-        logger.debug("unary req=${LogUtils.objectString(req)}")
+        logger.debug("unary req=${LogUtils.objectString(req)} id=${req.id}")
         val resp = EchoResp.newBuilder()
           .setId(req.id)
           .setValue(req.value)
           .build()
-        logger.debug("unary resp=${LogUtils.objectString(resp)}")
+        logger.debug("unary resp=${LogUtils.objectString(resp)} id=${resp.id}")
         return resp
       }
 
       override suspend fun serverStreaming(req: EchoCountReq): ReceiveChannel<EchoResp> {
-        logger.debug("serverStreaming req=${LogUtils.objectString(req)}")
+        logger.debug("serverStreaming req=${LogUtils.objectString(req)} count=${req.count}")
         return GlobalScope.produce {
           for (i in 0 until req.count) {
             val msg = EchoResp.newBuilder()
               .setId(i)
               .setValue(i.toString())
               .build()
-            logger.debug("serverStreaming resp.msg=${LogUtils.objectString(msg)}")
+            logger.debug("serverStreaming resp.msg=${LogUtils.objectString(msg)} id=${msg.id}")
             send(msg)
           }
         }
@@ -46,7 +46,7 @@ abstract class EchoTest : TestBase() {
       override suspend fun clientStreaming(req: ReceiveChannel<EchoReq>): EchoCountResp {
         var count = 0
         for(msg in req) {
-          logger.debug("clientStreaming req.msg=${LogUtils.objectString(msg)}")
+          logger.debug("clientStreaming req.msg=${LogUtils.objectString(msg)} id=${msg.id}")
           require(msg.id == count)
           count++
         }
@@ -54,7 +54,7 @@ abstract class EchoTest : TestBase() {
         val resp = EchoCountResp.newBuilder()
           .setCount(count)
           .build()
-        logger.debug("clientStreaming resp=${LogUtils.objectString(resp)}")
+        logger.debug("clientStreaming resp=${LogUtils.objectString(resp)} count=${resp.count}")
         return resp
       }
 
@@ -66,12 +66,12 @@ abstract class EchoTest : TestBase() {
             require(reqMsg.id == count)
             count++
 
-            logger.debug("bidiStreaming req.msg=${LogUtils.objectString(reqMsg)}")
+            logger.debug("bidiStreaming req.msg=${LogUtils.objectString(reqMsg)} id=${reqMsg.id}")
             val respMsg = EchoResp.newBuilder()
               .setId(reqMsg.id)
               .setValue(reqMsg.value)
               .build()
-            logger.debug("bidiStreaming resp.msg=${LogUtils.objectString(respMsg)}")
+            logger.debug("bidiStreaming resp.msg=${LogUtils.objectString(respMsg)} id=${respMsg.id}")
             send(respMsg)
           }
         }
@@ -118,7 +118,7 @@ abstract class EchoTest : TestBase() {
     }
   }
 
-  //@Test
+  @Test
   fun testBidiStreaming() {
     runBlockingWithTimeout(timeout) {
       val req = makeChannel(streamNum)
@@ -134,7 +134,7 @@ abstract class EchoTest : TestBase() {
   }
 }
 
-//class EchoUnitTest : EchoTest()
+class EchoUnitTest : EchoTest()
 
 class EchoIntegrationTest : EchoTest() {
   override fun newChannel(): ManagedChannel {

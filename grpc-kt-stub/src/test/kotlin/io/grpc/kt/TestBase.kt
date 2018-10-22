@@ -31,8 +31,8 @@ abstract class TestBase {
   private val uniqueServerName = "in-process server for $javaClass"
   protected lateinit var channel: ManagedChannel
   private lateinit var server: Server
-  protected val timeout: Long = 1000 * 1000
-  protected val streamNum = 128
+  protected open val timeout: Long = 1 * 1000
+  protected val streamNum = 64
   protected val stub by lazy { EchoGrpcKt.newStub(channel) }
 
   protected open fun newChannel(): ManagedChannel {

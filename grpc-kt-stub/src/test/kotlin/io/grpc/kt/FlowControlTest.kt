@@ -5,7 +5,6 @@ import io.grpc.Server
 import io.grpc.kt.EchoService.EchoReq
 import io.grpc.kt.EchoService.EchoResp
 import io.grpc.kt.IntegrationTestHelper.runBlockingWithTimeout
-import io.grpc.kt.TestHelper.makeChannel
 import io.grpc.netty.NettyChannelBuilder
 import io.grpc.netty.NettyServerBuilder
 import kotlinx.coroutines.GlobalScope
@@ -18,6 +17,7 @@ import org.slf4j.LoggerFactory
 abstract class FlowControlTest : TestBase() {
   private val logger = LoggerFactory.getLogger(javaClass)
   private val bigStr = String(ByteArray(1024 * 8))
+  override val timeout: Long = 5 * 1000
 
 
   override fun newService(): EchoGrpcKt.EchoImplBase {
@@ -26,7 +26,7 @@ abstract class FlowControlTest : TestBase() {
         return GlobalScope.produce {
           for (reqMsg in req) {
             logger.debug("Received req.msg=${reqMsg.id}")
-            delay(10)
+            delay(5)
 
             val respMsg = EchoResp.newBuilder()
               .setId(reqMsg.id)
@@ -80,13 +80,14 @@ abstract class FlowControlTest : TestBase() {
       val resp = stub.serverStreaming(req)
       for (msg in resp) {
         logger.debug("Received resp.msg=${msg.id}")
+        delay(5)
       }
     }
   }
 }
 
 //@Ignore("Flow control test, manually verified by log")
-//class FlowControlUnitTest : FlowControlTest()
+class FlowControlUnitTest : FlowControlTest()
 
 //@Ignore("Flow control test, manually verified by log")
 class FlowControlIntegrationTest : FlowControlTest() {
