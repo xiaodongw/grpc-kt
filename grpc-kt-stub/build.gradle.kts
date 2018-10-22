@@ -23,7 +23,6 @@ dependencies {
 
   testImplementation("org.junit.jupiter:junit-jupiter-api:${Constants.junitVersion}")
   testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:${Constants.junitVersion}")
-  testCompile("org.assertj:assertj-core:3.11.1")
   testCompile("org.slf4j:slf4j-simple:1.7.25")
 }
 
@@ -63,9 +62,9 @@ configure<JavaPluginConvention> {
   })
 }
 
-//tasks.named("compileKotlin").configure {
-//  dependsOn("generateProto")
-//}
+tasks.named("compileTestKotlin").configure {
+  dependsOn("generateTestProto")
+}
 
 tasks.withType<Test> {
   useJUnitPlatform {

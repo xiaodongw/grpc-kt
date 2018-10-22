@@ -1,11 +1,17 @@
 import java.text.SimpleDateFormat
 import java.util.*
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import org.gradle.internal.impldep.org.apache.maven.artifact.ant.RemoteRepository
 import org.gradle.kotlin.dsl.*
 import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformJvmPlugin
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import kotlin.math.sign
 
 buildscript {
+  repositories {
+    maven("https://dl.bintray.com/kotlin/kotlin-eap")
+  }
+
   dependencies {
     classpath("com.google.protobuf:protobuf-gradle-plugin:0.8.6")
   }
@@ -22,16 +28,12 @@ subprojects {
   apply {
     plugin<KotlinPlatformJvmPlugin>()
     plugin("com.github.ben-manes.versions")
+    plugin("signing")
+    plugin("maven")
   }
-//  apply plugin: "checkstyle"
-//  apply plugin: "java"
-//  apply plugin: "maven"
-//  apply plugin: "idea"
-//  apply plugin: "signing"
-//  apply plugin: "jacoco"
 
   group = "com.github.xiaodongw"
-  version = "0.1.0"
+  version = "0.2.0"
 
   repositories {
     mavenCentral()
@@ -45,92 +47,70 @@ subprojects {
     }
   }
 
-//  signing {
-//    required false
-//    sign configurations.archives
-//  }
-//
-//  // Disable JavaDoc doclint on Java 8. It's annoying.
-//  if (JavaVersion.current().isJava8Compatible()) {
-//    allprojects {
-//      tasks.withType(Javadoc) {
-//        options.addStringOption('Xdoclint:none', '-quiet')
-//      }
-//    }
-//  }
-//
-//  checkstyle {
-//    configFile = file("$rootDir/checkstyle.xml")
-//    toolVersion = "6.17"
-//    ignoreFailures = false
-//    if (rootProject.hasProperty("checkstyle.ignoreFailures")) {
-//      ignoreFailures = rootProject.properties["checkstyle.ignoreFailures"].toBoolean()
-//    }
-//    configProperties["rootDir"] = rootDir
-//  }
-//
-//  checkstyleMain {
-//    source = fileTree(dir: "src/main", include: "**/*.java")
-//  }
-//
-//  checkstyleTest {
-//    source = fileTree(dir: "src/test", include: "**/*.java")
-//  }
-//
-//  task javadocJar(type: Jar) {
-//    classifier = 'javadoc'
-//    from javadoc
-//  }
-//
-//  task sourcesJar(type: Jar) {
-//    classifier = 'sources'
-//    from sourceSets.main.allSource
-//  }
-//
-//  artifacts {
-//    archives javadocJar, sourcesJar
-//  }
-//
-//  uploadArchives.repositories.mavenDeployer {
-//    beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
-//    String stagingUrl
-//    if (rootProject.hasProperty('repositoryId')) {
-//      stagingUrl = 'https://oss.sonatype.org/service/local/staging/deployByRepositoryId/' +
-//          rootProject.repositoryId
-//    } else {
-//      stagingUrl = 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
-//    }
-//    def configureAuth = {
-//      if (rootProject.hasProperty('ossrhUsername') && rootProject.hasProperty('ossrhPassword')) {
-//        authentication(userName: rootProject.ossrhUsername, password: rootProject.ossrhPassword)
-//      }
-//    }
-//    repository(url: stagingUrl, configureAuth)
-//    snapshotRepository(url: 'https://oss.sonatype.org/content/repositories/snapshots/', configureAuth)
-//
-//    pom.project {
-//      name "grpc-rx"
-//      description 'GRPC stub & compiler for RxJava2'
-//      url 'https://github.com/xiaodongw/grpc-rx'
-//
-//      scm {
-//        url 'https://github.com/xiaodongw/grpc-rx.git'
-//      }
-//
-//      licenses {
-//        license {
-//          name 'The Apache License, Version 2.0'
-//          url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-//        }
-//      }
-//
-//      developers {
-//        developer {
-//          id 'xiaodongw'
-//          name 'Xiaodong Wang'
-//          email 'xiaodongw79@gmail.com'
-//        }
-//      }
-//    }
-//  }
+  configure<SigningExtension> {
+    isRequired = false
+    sign(configurations.archives.get())
+  }
+
+  tasks.register("sourcesJar", Jar::class) {
+    classifier = "sources"
+    from(sourceSets.main.get().allSource)
+  }
+
+
+  artifacts {
+    val sourcesJar = tasks.named("sourcesJar")
+    add("archives", sourcesJar)
+  }
+
+  tasks.named<Upload>("uploadArchives") {
+    repositories {
+      withConvention(MavenRepositoryHandlerConvention::class) {
+        mavenDeployer {
+          withGroovyBuilder {
+            "beforeDeployment" {
+              project.configure<SigningExtension> {
+                signPom(delegate as MavenDeployment)
+              }
+            }
+          }
+
+          withGroovyBuilder {
+            "repository"("url" to uri("https://oss.sonatype.org/service/local/staging/deploy/maven2/")) {
+              "authentication"(mapOf(
+                "userName" to rootProject.properties["ossrhUsername"],
+                "password" to rootProject.properties["ossrhPassword"]
+              ))
+            }
+          }
+            //"snapshotRepository"("url" to uri("$buildDir/m2/snapshots"))
+
+          pom.project {
+            withGroovyBuilder {
+              "name"("grpc-kt")
+              "description"("GRPC stub & compiler for RxJava2")
+              "url"("https://github.com/xiaodongw/grpc-kt")
+              "scm" {
+                "url"("https://github.com/xiaodongw/grpc-kt.git")
+              }
+              "licenses" {
+                "license" {
+                  "name"("The Apache License, Version 2.0")
+                  "url"("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                }
+              }
+
+              "developers" {
+                "developer" {
+                  "id"("xiaodongw")
+                  "name"("Xiaodong Wang")
+                  "email"("xiaodongw79@gmail.com")
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }

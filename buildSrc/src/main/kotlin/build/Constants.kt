@@ -15,7 +15,7 @@ fun String.toGString(): GString {
 
 fun Project.pluginPath(): String {
   val exeSuffix = ""
-  return "$rootDir/grpc-rx-compiler/build/exe/$Constants.protocPluginBaseName$exeSuffix"
+  return "$rootDir/grpc-kt-compiler/build/exe/${Constants.protocPluginBaseName}$exeSuffix"
 }
 
 //fun Project.osdetector(): OsDetectro {
