@@ -1,0 +1,37 @@
+description = "gRPC with Kotlin Coroutine"
+
+dependencies {
+  compile "io.grpc:grpc-netty:${grpcJavaVersion}"
+  compile "io.grpc:grpc-protobuf:${grpcJavaVersion}"
+  compile "io.grpc:grpc-stub:${grpcJavaVersion}"
+  compile "org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:${coroutineVersion}"
+  compile 'org.slf4j:slf4j-api:1.7.25'
+
+  testImplementation 'org.junit.jupiter:junit-jupiter-api:5.1.0'
+  testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.1.0'
+  testRuntimeOnly 'org.slf4j:slf4j-simple:1.7.25'
+}
+
+test {
+  useJUnitPlatform()
+}
+
+protobuf {
+  generatedFilesBaseDir = "$projectDir/gen"
+  protoc {
+    // The version of protoc must match protobuf-java. If you don't depend on
+    // protobuf-java directly, you will be transitively depending on the
+    // protobuf-java version that grpc depends on.
+    artifact = "com.google.protobuf:protoc:${protobufVersion}"
+  }
+  plugins {
+    grpc {
+      path = pluginPath
+    }
+  }
+  generateProtoTasks {
+    all()*.plugins {
+      grpc {}
+    }
+  }
+}

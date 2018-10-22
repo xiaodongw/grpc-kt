@@ -119,7 +119,7 @@ object {{$s.Name}}GrpcKt {
     ServerCallsKt.ClientStreamingMethod<REQ, RESP>,
     ServerCallsKt.BidiStreamingMethod<REQ, RESP> {
 
-    @java.lang.SuppressWarnings("unchecked")
+    @Suppress("UNCHECKED_CAST")
     override suspend fun unaryInvoke(req: REQ): RESP {
       return when (methodId) {
         {{- range $i, $m := .Methods}}
@@ -131,7 +131,7 @@ object {{$s.Name}}GrpcKt {
       }
     }
 
-    @java.lang.SuppressWarnings("unchecked")
+    @Suppress("UNCHECKED_CAST")
     override suspend fun serverStreamingInvoke(req: REQ): ReceiveChannel<RESP> {
       return when (methodId) {
         {{- range $i, $m := .Methods}}
@@ -143,7 +143,7 @@ object {{$s.Name}}GrpcKt {
       }
     }
 
-    @java.lang.SuppressWarnings("unchecked")
+    @Suppress("UNCHECKED_CAST")
     override suspend fun clientStreamingInvoke(req: ReceiveChannel<REQ>): RESP {
       return when (methodId) {
         {{- range $i, $m := .Methods}}
@@ -155,7 +155,7 @@ object {{$s.Name}}GrpcKt {
       }
     }
 
-    @java.lang.SuppressWarnings("unchecked")
+    @Suppress("UNCHECKED_CAST")
     override suspend fun bidiStreamingInvoke(req: ReceiveChannel<REQ>): ReceiveChannel<RESP> {
       return when (methodId) {
         {{- range $i, $m := .Methods}}
