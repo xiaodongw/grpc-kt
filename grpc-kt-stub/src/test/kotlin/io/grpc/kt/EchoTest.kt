@@ -118,7 +118,7 @@ abstract class EchoTest : TestBase() {
     }
   }
 
-  @Test
+  //@Test
   fun testBidiStreaming() {
     runBlockingWithTimeout(timeout) {
       val req = makeChannel(streamNum)
@@ -134,7 +134,7 @@ abstract class EchoTest : TestBase() {
   }
 }
 
-class EchoUnitTest : EchoTest()
+//class EchoUnitTest : EchoTest()
 
 class EchoIntegrationTest : EchoTest() {
   override fun newChannel(): ManagedChannel {
