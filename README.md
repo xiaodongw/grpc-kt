@@ -1,5 +1,5 @@
 # GRPC-Kotlin
-![Travis](https://travis-ci.org/xiaodongw/grpc-kt.svg?branch=master)
+[![Travis](https://travis-ci.org/xiaodongw/grpc-kt.svg?branch=master)](https://travis-ci.org/xiaodongw/grpc-kt)
 
 This is a GRPC stub & compiler for Kotlin Coroutine.
 
