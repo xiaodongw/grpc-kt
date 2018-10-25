@@ -54,8 +54,13 @@ allprojects {
     }
   }
   
+  compileKotlin {
+    kotlinOptions.freeCompilerArgs = ['-Xuse-experimental=kotlinx.coroutines.ExperimentalCoroutinesApi']
+  }
+  
   compileTestKotlin {
     kotlinOptions.jvmTarget = "1.8"
+    kotlinOptions.freeCompilerArgs = ['-Xuse-experimental=kotlinx.coroutines.ExperimentalCoroutinesApi']
   }
   
   signing {
