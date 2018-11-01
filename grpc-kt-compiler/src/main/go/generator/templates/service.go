@@ -10,7 +10,7 @@ import io.grpc.MethodDescriptor.generateFullMethodName
 import io.grpc.kt.stub.ClientCallsKt
 import io.grpc.kt.stub.ServerCallsKt
 
-{{- /**
+{{/**
  * <pre>
  * Test service that supports all call types.
  * </pre>
@@ -52,8 +52,7 @@ object {{$s.Name}}GrpcKt {
    * Test service that supports all call types.
    * </pre>
    */}}
-  abstract class {{.Name}}ImplBase : io.grpc.BindableService {
-
+  interface {{$s.Name}} {
     {{range $i, $m := .Methods}}
     {{- /**
      * <pre>
@@ -61,11 +60,27 @@ object {{$s.Name}}GrpcKt {
      * The server returns the client payload as-is.
      * </pre>
      */ -}}
-    open suspend fun {{$m.JavaName}}(req: {{$m.FullInputType}}): {{$m.FullOutputType}} {
+    suspend fun {{$m.JavaName}}(req: {{$m.FullInputType}}): {{$m.FullOutputType}}
+    {{end}}
+  }
+
+  {{/**
+   * <pre>
+   * Test service that supports all call types.
+   * </pre>
+   */}}
+  abstract class {{.Name}}ImplBase : io.grpc.BindableService, {{$s.Name}} {
+    {{range $i, $m := .Methods}}
+    {{- /**
+     * <pre>
+     * One requestMore followed by one response.
+     * The server returns the client payload as-is.
+     * </pre>
+     */ -}}
+    override suspend fun {{$m.JavaName}}(req: {{$m.FullInputType}}): {{$m.FullOutputType}} {
       return ServerCallsKt.{{$m.UnimplementedCall}}({{$m.FieldName}})
     }
     {{end}}
-
     override fun bindService(): io.grpc.ServerServiceDefinition {
       return io.grpc.ServerServiceDefinition.builder(serviceDescriptor)
         {{- range $i, $m := .Methods}}
@@ -87,7 +102,7 @@ object {{$s.Name}}GrpcKt {
    * </pre>
    */}}
   class {{$s.Name}}Stub internal constructor(channel: io.grpc.Channel, callOptions: io.grpc.CallOptions)
-    : io.grpc.stub.AbstractStub<{{$s.Name}}Stub>(channel, callOptions) {
+    : io.grpc.stub.AbstractStub<{{$s.Name}}Stub>(channel, callOptions), {{$s.Name}} {
     internal constructor(channel: io.grpc.Channel): this(channel, io.grpc.CallOptions.DEFAULT)
 
     override fun build(channel: io.grpc.Channel,
@@ -102,15 +117,15 @@ object {{$s.Name}}GrpcKt {
      * The server returns the client payload as-is.
      * </pre>
      */ -}}
-    suspend fun {{$m.JavaName}}(req: {{$m.FullInputType}}): {{$m.FullOutputType}} {
+    override suspend fun {{$m.JavaName}}(req: {{$m.FullInputType}}): {{$m.FullOutputType}} {
       return ClientCallsKt.{{$m.Call}}(
-        getChannel().newCall({{$m.FieldName}}, callOptions), {{$m.CallParams}});
+        getChannel().newCall({{$m.FieldName}}, callOptions), {{$m.CallParams}})
     }
     {{end}}
   }
 
   {{range $i, $m := .Methods}}
-  const val {{$m.IdName}} = {{$m.Id}};
+  const val {{$m.IdName}} = {{$m.Id}}
   {{- end}}
 
   private class MethodHandlers<REQ, RESP>(private val serviceImpl: {{$s.Name}}ImplBase, private val methodId: Int) :
@@ -171,7 +186,7 @@ object {{$s.Name}}GrpcKt {
 
   private class {{$s.Name}}DescriptorSupplier : io.grpc.protobuf.ProtoFileDescriptorSupplier {
     override fun getFileDescriptor(): com.google.protobuf.Descriptors.FileDescriptor {
-      return {{$s.JavaPackage}}.{{$s.OuterClassName}}.getDescriptor();
+      return {{$s.JavaPackage}}.{{$s.OuterClassName}}.getDescriptor()
     }
   }
 
