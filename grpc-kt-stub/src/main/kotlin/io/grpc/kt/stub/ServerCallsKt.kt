@@ -138,7 +138,7 @@ object ServerCallsKt {
       if(!working.compareAndSet(false, true)) return
 
       logger.trace("kickoff")
-      GlobalScope.launch(cd) {
+      launch(cd) {
         try {
           val msg = channel.receive()
           logger.trace("channel.receive() msg=${LogUtils.objectString(msg)}")
@@ -174,7 +174,7 @@ object ServerCallsKt {
 
     override fun onMessage(msg: REQ) {
       logger.trace("onMessage: msg=${LogUtils.objectString(msg)}")
-      GlobalScope.launch(cd) {
+      launch(cd) {
         try {
           channel.send(msg)
           call.request(1)
@@ -185,14 +185,14 @@ object ServerCallsKt {
     }
 
     override fun onHalfClose() {
-      GlobalScope.launch(cd) {
+      launch(cd) {
         channel.close()
       }
 
     }
 
     override fun onCancel() {
-      GlobalScope.launch(cd) {
+      launch(cd) {
         channel.close(CancellationException("GRPC call is cancelled"))
       }
     }
@@ -217,7 +217,7 @@ object ServerCallsKt {
     override fun startCall(call: ServerCall<REQ, RESP>, headers: Metadata): ServerCall.Listener<REQ> {
       val cd = SerializingExecutor(ForkJoinPool.commonPool()).asCoroutineDispatcher()
       val requestReceiver = SingleRequestReceiver(call)
-      GlobalScope.launch(cd) {
+      launch(cd) {
         try {
           val req = requestReceiver.value().await()
           val resp = method.unaryInvoke(req)
@@ -244,7 +244,7 @@ object ServerCallsKt {
     override fun startCall(call: ServerCall<REQ, RESP>, headers: Metadata): ServerCall.Listener<REQ> {
       val cd = SerializingExecutor(ForkJoinPool.commonPool()).asCoroutineDispatcher()
       val requestReceiver = SingleRequestReceiver(call)
-      GlobalScope.launch {
+      launch(cd) {
         try {
           val req = requestReceiver.value().await()
           val resp = method.serverStreamingInvoke(req)
@@ -272,7 +272,7 @@ object ServerCallsKt {
     override fun startCall(call: ServerCall<REQ, RESP>, headers: Metadata): ServerCall.Listener<REQ> {
       val cd = SerializingExecutor(ForkJoinPool.commonPool()).asCoroutineDispatcher()
       val requestReceiver = StreamRequestReceiver(call, cd)
-      GlobalScope.launch {
+      launch(cd) {
         try {
           val req = requestReceiver.channel()
           val resp = method.clientStreamingInvoke(req)
@@ -299,7 +299,7 @@ object ServerCallsKt {
     override fun startCall(call: ServerCall<REQ, RESP>, headers: Metadata): ServerCall.Listener<REQ> {
       val cd = SerializingExecutor(ForkJoinPool.commonPool()).asCoroutineDispatcher()
       val requestReceiver = StreamRequestReceiver(call, cd)
-      GlobalScope.launch {
+      launch(cd) {
         try {
           val req = requestReceiver.channel()
           val resp = method.bidiStreamingInvoke(req)

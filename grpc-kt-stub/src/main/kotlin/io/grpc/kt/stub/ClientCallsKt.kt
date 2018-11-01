@@ -1,6 +1,5 @@
 package io.grpc.kt.stub
 
-import io.grpc.CallOptions
 import io.grpc.ClientCall
 import io.grpc.Metadata
 import io.grpc.Status
@@ -162,7 +161,7 @@ object ClientCallsKt {
       if (!working.compareAndSet(false, true)) return
 
       logger.trace("kickoff")
-      GlobalScope.launch {
+      launch(cd) {
         try {
           val msg = channel.receive()
           logger.trace("channel.receive() msg=${LogUtils.objectString(msg)}")
@@ -202,7 +201,7 @@ object ClientCallsKt {
 
     override fun onMessage(msg: RESP) {
       logger.trace("onMessage: msg=${LogUtils.objectString(msg)}")
-      GlobalScope.launch(cd) {
+      launch(cd) {
         try {
           channel.send(msg)
           logger.trace("channel.send() msg=${LogUtils.objectString(msg)}")
@@ -215,7 +214,7 @@ object ClientCallsKt {
 
     override fun onClose(status: Status, trailers: Metadata) {
       logger.trace("onClose")
-      GlobalScope.launch(cd) {
+      launch(cd) {
         if (status.isOk) {
           channel.close()
         } else {
