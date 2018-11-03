@@ -89,14 +89,22 @@ object ClientCallsKt {
   }
 
   private class SingleRequestSender<REQ>(private val call: ClientCall<REQ, *>, private val req: REQ) : CallHandler {
+    companion object {
+      private val logger = LoggerFactory.getLogger(SingleRequestSender::class.java)
+    }
 
     override fun start() {
+      logger.trace("start")
       call.sendMessage(req)
       call.halfClose()
     }
   }
 
   private open class SingleResponseReceiver<RESP>(protected var call: ClientCall<*, RESP>) : ClientCall.Listener<RESP>(), CallHandler {
+    companion object {
+      private val logger = LoggerFactory.getLogger(SingleResponseReceiver::class.java)
+    }
+
     private var value: RESP? = null
     private val deferred: CompletableDeferred<RESP> = CompletableDeferred()
 
@@ -106,15 +114,17 @@ object ClientCallsKt {
       return deferred
     }
 
-    override fun onMessage(v: RESP?) {
+    override fun onMessage(msg: RESP) {
+      logger.trace("onMessage: msg=${LogUtils.objectString(msg)}")
       if (value != null) {
         throw Status.INTERNAL.withDescription("More than one deferred received for unary call")
           .asRuntimeException()
       }
-      value = v
+      value = msg
     }
 
     override fun onClose(status: Status, trailers: Metadata) {
+      logger.trace("onClose: $status")
       if (status.isOk) {
         if (value == null) {
           // No deferred received so mark the future as an error
@@ -130,10 +140,12 @@ object ClientCallsKt {
     }
 
     override fun start() {
+      logger.trace("start")
       call.request(2)
     }
 
     override fun onReady() {
+      logger.trace("onReady")
       readyHandler?.onReady()
     }
   }
@@ -142,7 +154,9 @@ object ClientCallsKt {
                                          private val channel: ReceiveChannel<REQ>,
                                          private val cd: CoroutineDispatcher)
     : CallHandler, ReadyHandler {
-    private val logger = LoggerFactory.getLogger(this.javaClass)
+    companion object {
+      private val logger = LoggerFactory.getLogger(StreamRequestSender::class.java)
+    }
     private val working = AtomicBoolean(false)
     private var completed = false
 
@@ -153,6 +167,7 @@ object ClientCallsKt {
     }
 
     override fun start() {
+      logger.trace("start")
       kickoff()
     }
 
@@ -189,7 +204,9 @@ object ClientCallsKt {
   private open class StreamResponseReceiver<RESP>(private val call: ClientCall<*, RESP>,
                                                   private val cd: CoroutineDispatcher)
     : ClientCall.Listener<RESP>(), CallHandler {
-    private val logger = LoggerFactory.getLogger(this.javaClass)
+    companion object {
+      private val logger = LoggerFactory.getLogger(StreamResponseReceiver::class.java)
+    }
     private val channel = Channel<RESP>()
 
     var readyHandler: ReadyHandler? = null

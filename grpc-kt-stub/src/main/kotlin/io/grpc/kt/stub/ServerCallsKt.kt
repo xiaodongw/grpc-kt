@@ -62,8 +62,11 @@ object ServerCallsKt {
    * @param <RESP>
   </RESP> */
   private class SingleResponseSender<RESP>(private val call: ServerCall<*, RESP>, private val resp: RESP) : CallHandler {
-
+    companion object {
+      private val logger = LoggerFactory.getLogger(SingleResponseSender::class.java)
+    }
     override fun start() {
+      logger.trace("${call.methodDescriptor.fullMethodName} start")
       call.sendHeaders(Metadata())
       call.sendMessage(resp)
       call.close(Status.OK, Metadata())
@@ -71,6 +74,9 @@ object ServerCallsKt {
   }
 
   private open class SingleRequestReceiver<REQ>(protected var call: ServerCall<REQ, *>) : ServerCall.Listener<REQ>(), CallHandler {
+    companion object {
+      private val logger = LoggerFactory.getLogger(SingleRequestReceiver::class.java)
+    }
     private var value: REQ? = null
     private val deferred: CompletableDeferred<REQ> = CompletableDeferred()
 
@@ -80,19 +86,22 @@ object ServerCallsKt {
       return deferred
     }
 
-    override fun onMessage(v: REQ) {
+    override fun onMessage(msg: REQ) {
+      logger.debug("${call.methodDescriptor.fullMethodName} onMessage msg=${LogUtils.objectString(msg)}")
       if (value != null) {
         throw Status.INTERNAL.withDescription("More than one value received for unary call")
           .asRuntimeException()
       }
-      value = v
+      value = msg
     }
 
     override fun onCancel() {
+      logger.debug("${call.methodDescriptor.fullMethodName} onCancel")
       deferred.completeExceptionally(CancellationException("Request is cancelled"))
     }
 
     override fun onHalfClose() {
+      logger.trace("${call.methodDescriptor.fullMethodName} onHalfClose")
       if (value == null) {
         // No value received so mark the future as an error
         val error = Status.INTERNAL.withDescription("No value received for unary call")
@@ -104,10 +113,12 @@ object ServerCallsKt {
     }
 
     override fun start() {
+      logger.trace("${call.methodDescriptor.fullMethodName} start")
       call.request(2)
     }
 
     override fun onReady() {
+      logger.trace("${call.methodDescriptor.fullMethodName} onReady")
       readyHandler?.onReady()
     }
   }
@@ -120,7 +131,9 @@ object ServerCallsKt {
   internal class StreamResponseSender<RESP>(private val call: ServerCall<*, RESP>,
                                             private val channel: ReceiveChannel<RESP>,
                                             private val cd: CoroutineDispatcher): CallHandler, ReadyHandler {
-    private val logger = LoggerFactory.getLogger(this.javaClass)
+    companion object {
+      private val logger = LoggerFactory.getLogger(StreamResponseSender::class.java)
+    }
     private val working = AtomicBoolean(false)
 
     override fun onReady() {
@@ -162,7 +175,9 @@ object ServerCallsKt {
 
   private open class StreamRequestReceiver<REQ>(private val call: ServerCall<REQ, *>,
                                                 private val cd: CoroutineDispatcher) : ServerCall.Listener<REQ>(), CallHandler {
-    private val logger = LoggerFactory.getLogger(this.javaClass)
+    companion object {
+      private val logger = LoggerFactory.getLogger(StreamRequestReceiver::class.java)
+    }
     private val channel = Channel<REQ>()
 
     var readyHandler: ReadyHandler? = null
@@ -173,7 +188,7 @@ object ServerCallsKt {
 
 
     override fun onMessage(msg: REQ) {
-      logger.trace("onMessage: msg=${LogUtils.objectString(msg)}")
+      logger.trace("${call.methodDescriptor.fullMethodName} onMessage: msg=${LogUtils.objectString(msg)}")
       launch(cd) {
         try {
           channel.send(msg)
@@ -185,6 +200,7 @@ object ServerCallsKt {
     }
 
     override fun onHalfClose() {
+      logger.trace("${call.methodDescriptor.fullMethodName} onHalfClose")
       launch(cd) {
         channel.close()
       }
@@ -192,16 +208,19 @@ object ServerCallsKt {
     }
 
     override fun onCancel() {
+      logger.trace("${call.methodDescriptor.fullMethodName} onCancel")
       launch(cd) {
         channel.close(CancellationException("GRPC call is cancelled"))
       }
     }
 
     override fun start() {
+      logger.trace("${call.methodDescriptor.fullMethodName} start")
       call.request(1)
     }
 
     override fun onReady() {
+      logger.trace("${call.methodDescriptor.fullMethodName} onReady")
       readyHandler?.onReady()
     }
   }
