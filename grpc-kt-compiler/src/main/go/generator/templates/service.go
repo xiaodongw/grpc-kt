@@ -101,9 +101,8 @@ object {{$s.Name}}GrpcKt {
    * Test service that supports all call types.
    * </pre>
    */}}
-  class {{$s.Name}}Stub internal constructor(channel: io.grpc.Channel, callOptions: io.grpc.CallOptions)
+  class {{$s.Name}}Stub internal constructor(channel: io.grpc.Channel, callOptions: io.grpc.CallOptions = io.grpc.CallOptions.DEFAULT)
     : io.grpc.stub.AbstractStub<{{$s.Name}}Stub>(channel, callOptions), {{$s.Name}} {
-    internal constructor(channel: io.grpc.Channel): this(channel, io.grpc.CallOptions.DEFAULT)
 
     override fun build(channel: io.grpc.Channel,
                     callOptions: io.grpc.CallOptions): {{$s.Name}}Stub {

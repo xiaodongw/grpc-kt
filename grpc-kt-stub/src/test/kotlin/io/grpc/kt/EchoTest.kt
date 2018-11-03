@@ -2,8 +2,6 @@ package io.grpc.kt
 
 import io.grpc.ManagedChannel
 import io.grpc.Server
-import io.grpc.kt.EchoService.EchoCountReq
-import io.grpc.kt.EchoService.EchoReq
 import io.grpc.kt.IntegrationTestHelper.runBlockingWithTimeout
 import io.grpc.kt.TestHelper.makeChannel
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -17,7 +15,7 @@ abstract class EchoTest : TestBase() {
   @Test
   fun testUnary() {
     runBlockingWithTimeout(timeout) {
-      val req = EchoReq.newBuilder()
+      val req = EchoProto.EchoReq.newBuilder()
         .setId(1)
         .setValue("Hello")
         .build()
@@ -30,7 +28,7 @@ abstract class EchoTest : TestBase() {
   @Test
   fun testServerStreaming() {
     runBlockingWithTimeout(timeout) {
-      val req = EchoCountReq.newBuilder()
+      val req = EchoProto.EchoCountReq.newBuilder()
         .setCount(streamNum)
         .build()
 

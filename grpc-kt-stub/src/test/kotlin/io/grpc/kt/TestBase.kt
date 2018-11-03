@@ -17,10 +17,10 @@ object TestHelper {
     }
   }
 
-  fun makeChannel(num: Int): ReceiveChannel<EchoService.EchoReq> {
+  fun makeChannel(num: Int): ReceiveChannel<EchoProto.EchoReq> {
     return GlobalScope.produce {
       for (x in 0 until num) {
-        val req = EchoService.EchoReq.newBuilder().setId(x).setValue("Hello").build()
+        val req = EchoProto.EchoReq.newBuilder().setId(x).setValue("Hello").build()
         send(req)
       }
     }
@@ -49,7 +49,7 @@ abstract class TestBase {
       .build()
   }
 
-  protected abstract fun newService(): EchoGrpcKt.EchoImplBase
+  protected abstract fun newService(): io.grpc.BindableService
 
   @BeforeAll
   @Throws(Exception::class)

@@ -14,28 +14,28 @@ import org.junit.jupiter.api.assertThrows
 class ErrorPropagationTest : TestBase() {
   override fun newService(): EchoGrpcKt.EchoImplBase {
     return object : EchoGrpcKt.EchoImplBase() {
-      override suspend fun unary(req: EchoService.EchoReq): EchoService.EchoResp {
+      override suspend fun unary(req: EchoProto.EchoReq): EchoProto.EchoResp {
         throw RuntimeException("mocked unary error")
       }
 
-      override suspend fun serverStreaming(req: EchoService.EchoCountReq): ReceiveChannel<EchoService.EchoResp> {
+      override suspend fun serverStreaming(req: EchoProto.EchoCountReq): ReceiveChannel<EchoProto.EchoResp> {
         return GlobalScope.produce {
           for(i in 0 until 5) {
-            send(EchoService.EchoResp.newBuilder().build())
+            send(EchoProto.EchoResp.newBuilder().build())
           }
 
           throw RuntimeException("mocked server streaming error")
         }
       }
 
-      override suspend fun clientStreaming(req: ReceiveChannel<EchoService.EchoReq>): EchoService.EchoCountResp {
+      override suspend fun clientStreaming(req: ReceiveChannel<EchoProto.EchoReq>): EchoProto.EchoCountResp {
         var count = 0
         for(msg in req) {
           count++
           if (count >= 5) throw RuntimeException("mocked client streaming error")
         }
 
-        return EchoService.EchoCountResp.newBuilder().setCount(count).build()
+        return EchoProto.EchoCountResp.newBuilder().setCount(count).build()
       }
     }
   }
@@ -44,7 +44,7 @@ class ErrorPropagationTest : TestBase() {
   fun testUnaryError() {
     val exception = assertThrows<StatusRuntimeException> {
       runBlockingWithTimeout(timeout) {
-        stub.unary(EchoService.EchoReq.getDefaultInstance())
+        stub.unary(EchoProto.EchoReq.getDefaultInstance())
       }
     }
     assertEquals("UNKNOWN: mocked unary error", exception.message)
@@ -54,7 +54,7 @@ class ErrorPropagationTest : TestBase() {
   fun testServerStreamingError() {
     val exception = assertThrows<StatusRuntimeException> {
       runBlockingWithTimeout(timeout) {
-        val resp = stub.serverStreaming(EchoService.EchoCountReq.getDefaultInstance())
+        val resp = stub.serverStreaming(EchoProto.EchoCountReq.getDefaultInstance())
         consume(resp)
       }
     }

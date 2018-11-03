@@ -25,13 +25,17 @@ protobuf {
     artifact = "com.google.protobuf:protoc:${protobufVersion}"
   }
   plugins {
-    grpc {
+    'grpc-kt' {
       path = pluginPath
+    }
+    'grpc-java' {
+      artifact = 'io.grpc:protoc-gen-grpc-java:1.16.1'
     }
   }
   generateProtoTasks {
     all()*.plugins {
-      grpc {}
+      'grpc-kt' {}
+      'grpc-java' {}
     }
   }
 }

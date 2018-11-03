@@ -130,7 +130,7 @@ object ServerCallsKt {
   </RESP> */
   internal class StreamResponseSender<RESP>(private val call: ServerCall<*, RESP>,
                                             private val channel: ReceiveChannel<RESP>,
-                                            private val cd: CoroutineDispatcher): CallHandler, ReadyHandler {
+                                            private val dispatcher: CoroutineDispatcher): CallHandler, ReadyHandler {
     companion object {
       private val logger = LoggerFactory.getLogger(StreamResponseSender::class.java)
     }
@@ -151,7 +151,7 @@ object ServerCallsKt {
       if(!working.compareAndSet(false, true)) return
 
       logger.trace("kickoff")
-      launch(cd) {
+      launch(dispatcher) {
         try {
           val msg = channel.receive()
           logger.trace("channel.receive() msg=${LogUtils.objectString(msg)}")
@@ -174,7 +174,7 @@ object ServerCallsKt {
   }
 
   private open class StreamRequestReceiver<REQ>(private val call: ServerCall<REQ, *>,
-                                                private val cd: CoroutineDispatcher) : ServerCall.Listener<REQ>(), CallHandler {
+                                                private val dispatcher: CoroutineDispatcher) : ServerCall.Listener<REQ>(), CallHandler {
     companion object {
       private val logger = LoggerFactory.getLogger(StreamRequestReceiver::class.java)
     }
@@ -189,7 +189,7 @@ object ServerCallsKt {
 
     override fun onMessage(msg: REQ) {
       logger.trace("${call.methodDescriptor.fullMethodName} onMessage: msg=${LogUtils.objectString(msg)}")
-      launch(cd) {
+      launch(dispatcher) {
         try {
           channel.send(msg)
           call.request(1)
@@ -201,7 +201,7 @@ object ServerCallsKt {
 
     override fun onHalfClose() {
       logger.trace("${call.methodDescriptor.fullMethodName} onHalfClose")
-      launch(cd) {
+      launch(dispatcher) {
         channel.close()
       }
 
@@ -209,7 +209,7 @@ object ServerCallsKt {
 
     override fun onCancel() {
       logger.trace("${call.methodDescriptor.fullMethodName} onCancel")
-      launch(cd) {
+      launch(dispatcher) {
         channel.close(CancellationException("GRPC call is cancelled"))
       }
     }
@@ -234,9 +234,9 @@ object ServerCallsKt {
   class UnaryServerCallHandler<REQ, RESP>(private val method: UnaryMethod<REQ, RESP>) : ServerCallHandler<REQ, RESP> {
 
     override fun startCall(call: ServerCall<REQ, RESP>, headers: Metadata): ServerCall.Listener<REQ> {
-      val cd = SerializingExecutor(ForkJoinPool.commonPool()).asCoroutineDispatcher()
+      val dispatcher = SerializingExecutor(ForkJoinPool.commonPool()).asCoroutineDispatcher()
       val requestReceiver = SingleRequestReceiver(call)
-      launch(cd) {
+      launch(dispatcher) {
         try {
           val req = requestReceiver.value().await()
           val resp = method.unaryInvoke(req)
@@ -261,13 +261,13 @@ object ServerCallsKt {
   class ServerStreamingServerCallHandler<REQ, RESP>(private val method: ServerStreamingMethod<REQ, RESP>) : ServerCallHandler<REQ, RESP> {
 
     override fun startCall(call: ServerCall<REQ, RESP>, headers: Metadata): ServerCall.Listener<REQ> {
-      val cd = SerializingExecutor(ForkJoinPool.commonPool()).asCoroutineDispatcher()
+      val dispatcher = SerializingExecutor(ForkJoinPool.commonPool()).asCoroutineDispatcher()
       val requestReceiver = SingleRequestReceiver(call)
-      launch(cd) {
+      launch(dispatcher) {
         try {
           val req = requestReceiver.value().await()
           val resp = method.serverStreamingInvoke(req)
-          val respSender = StreamResponseSender(call, resp, cd)
+          val respSender = StreamResponseSender(call, resp, dispatcher)
           requestReceiver.readyHandler = respSender
           respSender.start()
         } catch (t: Throwable) {
@@ -289,9 +289,9 @@ object ServerCallsKt {
   class ClientStreamingServerCallHandler<REQ, RESP>(private val method: ClientStreamingMethod<REQ, RESP>) : ServerCallHandler<REQ, RESP> {
 
     override fun startCall(call: ServerCall<REQ, RESP>, headers: Metadata): ServerCall.Listener<REQ> {
-      val cd = SerializingExecutor(ForkJoinPool.commonPool()).asCoroutineDispatcher()
-      val requestReceiver = StreamRequestReceiver(call, cd)
-      launch(cd) {
+      val dispatcher = SerializingExecutor(ForkJoinPool.commonPool()).asCoroutineDispatcher()
+      val requestReceiver = StreamRequestReceiver(call, dispatcher)
+      launch(dispatcher) {
         try {
           val req = requestReceiver.channel()
           val resp = method.clientStreamingInvoke(req)
@@ -316,13 +316,13 @@ object ServerCallsKt {
   class BidiStreamingServerCallHandler<REQ, RESP>(private val method: BidiStreamingMethod<REQ, RESP>) : ServerCallHandler<REQ, RESP> {
 
     override fun startCall(call: ServerCall<REQ, RESP>, headers: Metadata): ServerCall.Listener<REQ> {
-      val cd = SerializingExecutor(ForkJoinPool.commonPool()).asCoroutineDispatcher()
-      val requestReceiver = StreamRequestReceiver(call, cd)
-      launch(cd) {
+      val dispatcher = SerializingExecutor(ForkJoinPool.commonPool()).asCoroutineDispatcher()
+      val requestReceiver = StreamRequestReceiver(call, dispatcher)
+      launch(dispatcher) {
         try {
           val req = requestReceiver.channel()
           val resp = method.bidiStreamingInvoke(req)
-          val respSender = StreamResponseSender(call, resp, cd)
+          val respSender = StreamResponseSender(call, resp, dispatcher)
           requestReceiver.readyHandler = respSender
           respSender.start()
         } catch (t: Throwable) {

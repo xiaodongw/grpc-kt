@@ -48,8 +48,11 @@ allprojects {
   sourceSets {
     test {
       kotlin {
+        srcDir "gen/test/grpc-kt"
+      }
+      java {
         srcDir "gen/test/java"
-        srcDir "gen/test/grpc"
+        srcDir "gen/test/grpc-java"
       }
     }
   }

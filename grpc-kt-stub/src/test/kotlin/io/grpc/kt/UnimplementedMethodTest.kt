@@ -19,7 +19,7 @@ class UnimplementedMethodTest : TestBase() {
     val exception = assertThrows<StatusRuntimeException> {
       runBlockingWithTimeout(timeout) {
         val stub = EchoGrpcKt.newStub(channel)
-        stub.unary(EchoService.EchoReq.getDefaultInstance())
+        stub.unary(EchoProto.EchoReq.getDefaultInstance())
       }
     }
     assertEquals(Status.UNIMPLEMENTED.code, exception.status.code)

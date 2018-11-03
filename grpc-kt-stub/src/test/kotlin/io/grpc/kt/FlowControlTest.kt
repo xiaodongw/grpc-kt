@@ -2,8 +2,6 @@ package io.grpc.kt
 
 import io.grpc.ManagedChannel
 import io.grpc.Server
-import io.grpc.kt.EchoService.EchoReq
-import io.grpc.kt.EchoService.EchoResp
 import io.grpc.kt.IntegrationTestHelper.runBlockingWithTimeout
 import io.grpc.netty.NettyChannelBuilder
 import io.grpc.netty.NettyServerBuilder
@@ -22,13 +20,13 @@ abstract class FlowControlTest : TestBase() {
 
   override fun newService(): EchoGrpcKt.EchoImplBase {
     return object : EchoGrpcKt.EchoImplBase() {
-      override suspend fun bidiStreaming(req: ReceiveChannel<EchoReq>): ReceiveChannel<EchoResp> {
+      override suspend fun bidiStreaming(req: ReceiveChannel<EchoProto.EchoReq>): ReceiveChannel<EchoProto.EchoResp> {
         return GlobalScope.produce {
           for (reqMsg in req) {
             logger.debug("Received req.msg=${reqMsg.id}")
             delay(5)
 
-            val respMsg = EchoResp.newBuilder()
+            val respMsg = EchoProto.EchoResp.newBuilder()
               .setId(reqMsg.id)
               .setValue(reqMsg.value)
               .build()
@@ -38,10 +36,10 @@ abstract class FlowControlTest : TestBase() {
         }
       }
 
-      override suspend fun serverStreaming(req: EchoService.EchoCountReq): ReceiveChannel<EchoResp> {
+      override suspend fun serverStreaming(req: EchoProto.EchoCountReq): ReceiveChannel<EchoProto.EchoResp> {
         return GlobalScope.produce {
           for (i in 0 until req.count) {
-            val respMsg = EchoResp.newBuilder()
+            val respMsg = EchoProto.EchoResp.newBuilder()
               .setId(i)
               .setValue(bigStr)
               .build()
@@ -58,7 +56,7 @@ abstract class FlowControlTest : TestBase() {
     runBlockingWithTimeout(timeout) {
       val req = GlobalScope.produce {
         for (x in 0 until streamNum) {
-          val req = EchoService.EchoReq.newBuilder()
+          val req = EchoProto.EchoReq.newBuilder()
             .setId(x)
             .setValue(bigStr)
             .build()
@@ -76,7 +74,7 @@ abstract class FlowControlTest : TestBase() {
   @Test
   fun testFlowControlSlowClient() {
     runBlockingWithTimeout(timeout) {
-      val req = EchoService.EchoCountReq.newBuilder().setCount(streamNum).build()
+      val req = EchoProto.EchoCountReq.newBuilder().setCount(streamNum).build()
       val resp = stub.serverStreaming(req)
       for (msg in resp) {
         logger.debug("Received resp.msg=${msg.id}")

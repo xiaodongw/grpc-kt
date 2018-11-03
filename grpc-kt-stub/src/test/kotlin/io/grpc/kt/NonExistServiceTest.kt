@@ -2,7 +2,6 @@ package io.grpc.kt
 
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
-import io.grpc.kt.EchoService.EchoReq
 import io.grpc.kt.IntegrationTestHelper.runBlockingWithTimeout
 import io.grpc.kt.TestHelper.consume
 import io.grpc.netty.NettyChannelBuilder
@@ -19,7 +18,7 @@ class NonExistServiceTest {
   fun testUnaryCall() {
     val exception = assertThrows<StatusRuntimeException> {
       runBlockingWithTimeout(timeout) {
-        client.unary(EchoReq.getDefaultInstance())
+        client.unary(EchoProto.EchoReq.getDefaultInstance())
       }
     }
     assertEquals(Status.UNAVAILABLE.code, exception.status.code)

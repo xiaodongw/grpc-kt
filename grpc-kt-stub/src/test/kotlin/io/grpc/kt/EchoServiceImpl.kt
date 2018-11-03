@@ -1,6 +1,7 @@
 package io.grpc.kt
 
 import io.grpc.kt.core.LogUtils
+import io.grpc.stub.StreamObserver
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.produce
@@ -9,12 +10,12 @@ import org.slf4j.LoggerFactory
 
 class EchoServiceImpl(private val lag: Long = 0) : EchoGrpcKt.EchoImplBase() {
   private val logger = LoggerFactory.getLogger(this.javaClass)
-  override suspend fun unary(req: EchoService.EchoReq): EchoService.EchoResp {
+  override suspend fun unary(req: EchoProto.EchoReq): EchoProto.EchoResp {
     logger.debug("unary req=${LogUtils.objectString(req)} id=${req.id}")
     if (lag > 0) {
       delay(lag)
     }
-    val resp = EchoService.EchoResp.newBuilder()
+    val resp = EchoProto.EchoResp.newBuilder()
       .setId(req.id)
       .setValue(req.value)
       .build()
@@ -22,14 +23,14 @@ class EchoServiceImpl(private val lag: Long = 0) : EchoGrpcKt.EchoImplBase() {
     return resp
   }
 
-  override suspend fun serverStreaming(req: EchoService.EchoCountReq): ReceiveChannel<EchoService.EchoResp> {
+  override suspend fun serverStreaming(req: EchoProto.EchoCountReq): ReceiveChannel<EchoProto.EchoResp> {
     logger.debug("serverStreaming req=${LogUtils.objectString(req)} count=${req.count}")
     if (lag > 0) {
       delay(lag)
     }
     return GlobalScope.produce {
       for (i in 0 until req.count) {
-        val msg = EchoService.EchoResp.newBuilder()
+        val msg = EchoProto.EchoResp.newBuilder()
           .setId(i)
           .setValue(i.toString())
           .build()
@@ -39,7 +40,7 @@ class EchoServiceImpl(private val lag: Long = 0) : EchoGrpcKt.EchoImplBase() {
     }
   }
 
-  override suspend fun clientStreaming(req: ReceiveChannel<EchoService.EchoReq>): EchoService.EchoCountResp {
+  override suspend fun clientStreaming(req: ReceiveChannel<EchoProto.EchoReq>): EchoProto.EchoCountResp {
     var count = 0
     for (msg in req) {
       if (lag > 0) {
@@ -50,14 +51,14 @@ class EchoServiceImpl(private val lag: Long = 0) : EchoGrpcKt.EchoImplBase() {
       count++
     }
 
-    val resp = EchoService.EchoCountResp.newBuilder()
+    val resp = EchoProto.EchoCountResp.newBuilder()
       .setCount(count)
       .build()
     logger.debug("clientStreaming resp=${LogUtils.objectString(resp)} count=${resp.count}")
     return resp
   }
 
-  override suspend fun bidiStreaming(req: ReceiveChannel<EchoService.EchoReq>): ReceiveChannel<EchoService.EchoResp> {
+  override suspend fun bidiStreaming(req: ReceiveChannel<EchoProto.EchoReq>): ReceiveChannel<EchoProto.EchoResp> {
     return GlobalScope.produce {
       var count = 0
 
@@ -69,7 +70,7 @@ class EchoServiceImpl(private val lag: Long = 0) : EchoGrpcKt.EchoImplBase() {
         count++
 
         logger.debug("bidiStreaming req.msg=${LogUtils.objectString(reqMsg)} id=${reqMsg.id}")
-        val respMsg = EchoService.EchoResp.newBuilder()
+        val respMsg = EchoProto.EchoResp.newBuilder()
           .setId(reqMsg.id)
           .setValue(reqMsg.value)
           .build()
@@ -77,5 +78,13 @@ class EchoServiceImpl(private val lag: Long = 0) : EchoGrpcKt.EchoImplBase() {
         send(respMsg)
       }
     }
+  }
+}
+
+class EchoServiceJavaImpl(private val lag: Long = 0) : EchoGrpc.EchoImplBase() {
+  override fun unary(req: EchoProto.EchoReq, responseObserver: StreamObserver<EchoProto.EchoResp>) {
+    val resp = EchoProto.EchoResp.newBuilder().setId(req.id).setValue(req.value).build()
+    responseObserver.onNext(resp)
+    responseObserver.onCompleted()
   }
 }
