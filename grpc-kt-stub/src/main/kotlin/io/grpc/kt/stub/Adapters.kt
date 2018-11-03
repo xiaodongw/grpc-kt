@@ -1,10 +1,9 @@
 package io.grpc.kt.stub
 
 import io.grpc.Context
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
+import kotlin.coroutines.AbstractCoroutineContextElement
+import kotlin.coroutines.CoroutineContext
 
 /**
  * Interface for starting the call.
@@ -18,14 +17,22 @@ interface ReadyHandler {
   fun onReady()
 }
 
+class GrpcContext(
+  val value: Context = Context.current()
+): ThreadContextElement<Context>, AbstractCoroutineContextElement(Key) {
+  companion object Key : CoroutineContext.Key<GrpcContext>
+
+  override fun updateThreadContext(context: CoroutineContext): Context {
+    return value.attach()
+  }
+
+  override fun restoreThreadContext(context: CoroutineContext, oldState: Context) {
+    value.detach(oldState)
+  }
+}
+
 internal fun <T> launch(cd: CoroutineDispatcher, block: suspend () -> T): Job {
-  val ctx = Context.current()
-  return GlobalScope.launch(cd) {
-    val prev = ctx.attach()
-    try {
-      block()
-    } finally {
-      ctx.detach(prev)
-    }
+  return GlobalScope.launch(cd + GrpcContext()) {
+    block()
   }
 }

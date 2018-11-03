@@ -2,81 +2,16 @@ package io.grpc.kt
 
 import io.grpc.ManagedChannel
 import io.grpc.Server
-import io.grpc.kt.EchoGrpcKt.EchoImplBase
-import io.grpc.kt.EchoService.*
+import io.grpc.kt.EchoService.EchoCountReq
+import io.grpc.kt.EchoService.EchoReq
 import io.grpc.kt.IntegrationTestHelper.runBlockingWithTimeout
 import io.grpc.kt.TestHelper.makeChannel
-import io.grpc.kt.core.LogUtils
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.channels.produce
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
-import org.slf4j.LoggerFactory
 
 abstract class EchoTest : TestBase() {
-  private val logger = LoggerFactory.getLogger(this.javaClass)
-
-  override fun newService(): EchoImplBase {
-    return object : EchoImplBase() {
-      override suspend fun unary(req: EchoReq): EchoResp {
-        logger.debug("unary req=${LogUtils.objectString(req)} id=${req.id}")
-        val resp = EchoResp.newBuilder()
-          .setId(req.id)
-          .setValue(req.value)
-          .build()
-        logger.debug("unary resp=${LogUtils.objectString(resp)} id=${resp.id}")
-        return resp
-      }
-
-      override suspend fun serverStreaming(req: EchoCountReq): ReceiveChannel<EchoResp> {
-        logger.debug("serverStreaming req=${LogUtils.objectString(req)} count=${req.count}")
-        return GlobalScope.produce {
-          for (i in 0 until req.count) {
-            val msg = EchoResp.newBuilder()
-              .setId(i)
-              .setValue(i.toString())
-              .build()
-            logger.debug("serverStreaming resp.msg=${LogUtils.objectString(msg)} id=${msg.id}")
-            send(msg)
-          }
-        }
-      }
-
-      override suspend fun clientStreaming(req: ReceiveChannel<EchoReq>): EchoCountResp {
-        var count = 0
-        for(msg in req) {
-          logger.debug("clientStreaming req.msg=${LogUtils.objectString(msg)} id=${msg.id}")
-          require(msg.id == count)
-          count++
-        }
-
-        val resp = EchoCountResp.newBuilder()
-          .setCount(count)
-          .build()
-        logger.debug("clientStreaming resp=${LogUtils.objectString(resp)} count=${resp.count}")
-        return resp
-      }
-
-      override suspend fun bidiStreaming(req: ReceiveChannel<EchoReq>): ReceiveChannel<EchoResp> {
-        return GlobalScope.produce {
-          var count = 0
-
-          for(reqMsg in req) {
-            require(reqMsg.id == count)
-            count++
-
-            logger.debug("bidiStreaming req.msg=${LogUtils.objectString(reqMsg)} id=${reqMsg.id}")
-            val respMsg = EchoResp.newBuilder()
-              .setId(reqMsg.id)
-              .setValue(reqMsg.value)
-              .build()
-            logger.debug("bidiStreaming resp.msg=${LogUtils.objectString(respMsg)} id=${respMsg.id}")
-            send(respMsg)
-          }
-        }
-      }
-    }
+  override fun newService(): EchoGrpcKt.EchoImplBase {
+    return EchoServiceImpl()
   }
 
   @Test
