@@ -7,6 +7,8 @@ but still being written in a synchronous way make it easier to read and maintain
 
 The generated service base and client stub share the same service interface, so they can be easily swapped for dependency injection and test mocking.
 
+Check [GRPC-RX](https://github.com/xiaodongw/grpc-rx) for RxJava2 binding.
+
 ## Getting started
 
 * In your project, configure Gradle to use the grpc-kt stub and compiler plugin.
