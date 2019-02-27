@@ -30,7 +30,7 @@ protobuf {
     ofSourceSet('test')*.plugins {
       grpc {
         // write CodeGeneratorRequest to request.bin, so it can be loaded for debug purpose
-        // option 'write_input=true'
+        option 'write_input=true'
       }
     }
   }
