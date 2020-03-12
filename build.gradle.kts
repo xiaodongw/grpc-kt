@@ -9,7 +9,7 @@ plugins {
   kotlin("jvm") apply false  // Enables Kotlin Gradle plugin
   signing
   `maven-publish`
-  id("com.github.ben-manes.versions").version("0.20.0")
+  id("com.github.ben-manes.versions").version("0.28.0")
 }
 
 allprojects {

@@ -31,8 +31,6 @@ class GrpcContext(
   }
 }
 
-internal fun <T> launch(cd: CoroutineDispatcher, block: suspend () -> T): Job {
-  return GlobalScope.launch(cd + GrpcContext()) {
-    block()
-  }
+internal fun launchGrpc(cd: CoroutineDispatcher, block: suspend CoroutineScope.() -> Unit): Job {
+  return GlobalScope.launch(context = cd + GrpcContext(), block = block)
 }

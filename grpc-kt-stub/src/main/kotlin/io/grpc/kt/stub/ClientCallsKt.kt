@@ -6,14 +6,22 @@ import io.grpc.Status
 import io.grpc.internal.SerializingExecutor
 import io.grpc.kt.core.LogUtils
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.ClosedReceiveChannelException
-import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.channels.produce
+import kotlinx.coroutines.channels.sendBlocking
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.sync.Semaphore
+import org.reactivestreams.Publisher
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ForkJoinPool
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.reactive.asFlow
 
 object ClientCallsKt {
+  private val logger = LoggerFactory.getLogger(SingleRequestSender::class.java)
 
   /**
    * Executes a unary call with a response.
@@ -21,31 +29,92 @@ object ClientCallsKt {
   suspend fun <REQ, RESP> unaryCall(
     call: ClientCall<REQ, RESP>,
     req: REQ): RESP {
-    val requestSender = SingleRequestSender(call, req)
-    val responseReceiver = SingleResponseReceiver(call)
+    val deferred: CompletableDeferred<RESP> = CompletableDeferred()
 
-    call.start(responseReceiver, Metadata())
-    requestSender.start()
-    responseReceiver.start()
+    withContext(GrpcContext()) {
+      val listener = object: ClientCall.Listener<RESP>() {
+        private var value: RESP? = null
+        override fun onMessage(msg: RESP) {
+          logger.trace("onMessage: msg=${LogUtils.objectString(msg)}")
+          if (value != null) {
+            throw Status.INTERNAL.withDescription("More than one deferred received for unary call")
+              .asRuntimeException()
+          }
+          value = msg
+        }
 
-    return responseReceiver.deferred().await()
+        override fun onClose(status: Status, trailers: Metadata) {
+          logger.trace("onClose: $status")
+          if (status.isOk) {
+            if (value == null) {
+              // No deferred received so mark the future as an error
+              val error = Status.INTERNAL.withDescription("No deferred received for unary call")
+                .asRuntimeException(trailers)
+              deferred.completeExceptionally(error)
+            } else {
+              deferred.complete(value!!)
+            }
+          } else {
+            deferred.completeExceptionally(status.asRuntimeException(trailers))
+          }
+        }
+      }
+      call.start(listener, Metadata())
+
+      call.sendMessage(req)
+      call.halfClose()
+      call.request(2)
+    }
+
+    // cancel the GPRC request if the coroutine is cancelled
+    deferred.invokeOnCompletion { cause ->
+      cause?.let { call.cancel("Cancelled by client", cause) }
+    }
+
+    return deferred.await()
   }
 
   /**
-   * Executes a server-streaming call with a response [ReceiveChannel].
+   * Executes a server-streaming call with a response [Flow].
    */
   suspend fun <REQ, RESP> serverStreamingCall(
     call: ClientCall<REQ, RESP>,
-    req: REQ): ReceiveChannel<RESP> {
-    val dispatcher = SerializingExecutor(ForkJoinPool.commonPool()).asCoroutineDispatcher()
-    val requestSender = SingleRequestSender(call, req)
-    val responseReceiver = StreamResponseReceiver(call, dispatcher)
+    req: REQ): Flow<RESP> {
+    return coroutineScope {
+      callbackFlow {
+        invokeOnClose { cause ->
+          cause?.let { call.cancel("Cancelled by client", cause) }
+        }
 
-    call.start(responseReceiver, Metadata())
-    requestSender.start()
-    responseReceiver.start()
+        val publisher: Publisher<String>? = null
 
-    return responseReceiver.channel()
+        publisher?.let { it.asFlow() }
+
+        val listener = object: ClientCall.Listener<RESP>() {
+          override fun onMessage(message: RESP) {
+            // offer(message)
+            sendBlocking(message)
+          }
+
+          override fun onClose(status: Status, trailers: Metadata) {
+            logger.trace("onClose: $status")
+            if (status.isOk) {
+              close(null)
+            } else {
+              close(status.asException())
+            }
+          }
+        }
+
+        call.start(listener, Metadata())
+
+        call.sendMessage(req)
+        call.halfClose()
+        call.request(2)
+
+        awaitClose()
+      }
+    }
   }
 
   /**
@@ -55,7 +124,7 @@ object ClientCallsKt {
    */
   suspend fun <REQ, RESP> clientStreamingCall(
     call: ClientCall<REQ, RESP>,
-    req: ReceiveChannel<REQ>): RESP {
+    req: Flow<REQ>): RESP {
     val dispatcher = SerializingExecutor(ForkJoinPool.commonPool()).asCoroutineDispatcher()
     val requestSender = StreamRequestSender(call, req, dispatcher)
     val responseReceiver = SingleResponseReceiver(call)
@@ -75,7 +144,7 @@ object ClientCallsKt {
    */
   suspend fun <REQ, RESP> bidiStreamingCall(
     call: ClientCall<REQ, RESP>,
-    req: ReceiveChannel<REQ>): ReceiveChannel<RESP> {
+    req: Flow<REQ>): Flow<RESP> {
     val dispatcher = SerializingExecutor(ForkJoinPool.commonPool()).asCoroutineDispatcher()
     val requestSender = StreamRequestSender(call, req, dispatcher)
     val responseReceiver = StreamResponseReceiver(call, dispatcher)
@@ -151,7 +220,7 @@ object ClientCallsKt {
   }
 
   private class StreamRequestSender<REQ>(private val call: ClientCall<REQ, *>,
-                                         private val channel: ReceiveChannel<REQ>,
+                                         private val flow: Flow<REQ>,
                                          private val dispatcher: CoroutineDispatcher)
     : CallHandler, ReadyHandler {
     companion object {
@@ -159,11 +228,12 @@ object ClientCallsKt {
     }
     private val working = AtomicBoolean(false)
     private var completed = false
+    private val semaphore = Semaphore(1)
 
     override fun onReady() {
       logger.trace("onReady")
 
-      kickoff()
+      semaphore.release()
     }
 
     override fun start() {
@@ -176,26 +246,24 @@ object ClientCallsKt {
       if (!working.compareAndSet(false, true)) return
 
       logger.trace("kickoff")
-      launch(dispatcher) {
+      launchGrpc(dispatcher) {
         try {
-          val msg = channel.receive()
-          logger.trace("channel.receive() msg=${LogUtils.objectString(msg)}")
-          call.sendMessage(msg)
-        } catch (t: Throwable) {
-          when(t) {
-            is ClosedReceiveChannelException -> {
-              call.halfClose()
-              completed = true
+          flow.collect { msg ->
+            logger.trace("flow.collect() msg=${LogUtils.objectString(msg)}")
+            call.sendMessage(msg)
+
+            if(!call.isReady) {
+              semaphore.acquire()
             }
-            else -> call.cancel("Error on receiving message from channel", t)
           }
+
+          call.halfClose()
+          completed = true
+        } catch (t: Throwable) {
+          call.cancel("Error on receiving message from flow", t)
+          coroutineContext.cancel(CancellationException(t.message, t))
         } finally {
           working.set(false)
-        }
-
-        // if grpc is ready to kickoff more
-        if (call.isReady) {
-          kickoff()
         }
       }
     }
@@ -207,11 +275,11 @@ object ClientCallsKt {
     companion object {
       private val logger = LoggerFactory.getLogger(StreamResponseReceiver::class.java)
     }
-    private val channel = Channel<RESP>()
+    private val channel = Flow<RESP>()
 
     var readyHandler: ReadyHandler? = null
 
-    fun channel(): ReceiveChannel<RESP> {
+    fun channel(): Flow<RESP> {
       return channel
     }
 

@@ -11,6 +11,7 @@ import org.gradle.plugins.signing.SigningExtension
 fun Project.librarySupport() {
   dependencies {
     "api"("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:${Deps.kotlinCoroutineVersion}")
+    "api"("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:${Deps.kotlinCoroutineVersion}")
     "api"(kotlin("stdlib-jdk8"))
     "implementation"("org.slf4j:slf4j-api:1.7.25")
   }

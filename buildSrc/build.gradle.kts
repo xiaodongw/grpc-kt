@@ -8,7 +8,7 @@ repositories {
 }
 
 dependencies {
-  compile("org.jetbrains.kotlin:kotlin-gradle-plugin:1.3.21")
-  compile("com.google.gradle:osdetector-gradle-plugin:1.6.2")
-  compile("com.google.protobuf:protobuf-gradle-plugin:0.8.8")
+  implementation("org.jetbrains.kotlin:kotlin-gradle-plugin:1.3.70")
+  implementation("com.google.gradle:osdetector-gradle-plugin:1.6.2")
+  implementation("com.google.protobuf:protobuf-gradle-plugin:0.8.12")
 }
